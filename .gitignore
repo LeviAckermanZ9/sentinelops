@@ -1,0 +1,111 @@
+# ============================================================
+# SentinelOps — .gitignore
+# ============================================================
+
+# ---------------------- Python ----------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+*.whl
+
+# ---------------------- Node.js ----------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+package-lock.json
+yarn.lock
+
+# ---------------------- Environment ----------------------
+.env
+.env.local
+.env.*.local
+*.env
+
+# ---------------------- Terraform ----------------------
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+!terraform.tfvars.example
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# ---------------------- Docker ----------------------
+docker-compose.override.yml
+
+# ---------------------- ML Models ----------------------
+ml-service/models/*.bin
+ml-service/models/*.pt
+ml-service/models/*.onnx
+ml-service/models/*.safetensors
+ml-service/models/config.json
+ml-service/models/tokenizer*
+ml-service/models/vocab*
+ml-service/models/special_tokens*
+!ml-service/models/.gitkeep
+
+# ---------------------- Kubernetes Secrets ----------------------
+kubernetes/secrets/*.yaml
+kubernetes/secrets/*.yml
+!kubernetes/secrets/.gitkeep
+
+# ---------------------- TLS / SSL ----------------------
+api-gateway/ssl/*.pem
+api-gateway/ssl/*.key
+api-gateway/ssl/*.crt
+api-gateway/ssl/*.csr
+!api-gateway/ssl/.gitkeep
+
+# ---------------------- IDE ----------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ---------------------- OS ----------------------
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ---------------------- Testing / Coverage ----------------------
+htmlcov/
+.coverage
+.coverage.*
+coverage/
+*.cover
+.pytest_cache/
+.nyc_output/
+
+# ---------------------- Logs ----------------------
+*.log
+logs/
+
+# ---------------------- Misc ----------------------
+*.bak
+*.tmp
+*.temp
+.cache/
