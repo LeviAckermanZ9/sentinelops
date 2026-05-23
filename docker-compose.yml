@@ -1,0 +1,191 @@
+# ============================================================
+# SentinelOps — Docker Compose (Local Development)
+# ============================================================
+# Full-stack environment: ML, Auth, Gateway, Frontend,
+# MongoDB, Prometheus, Grafana
+#
+# Usage:
+#   docker-compose up -d          # Start everything
+#   docker-compose up -d --build  # Rebuild and start
+#   docker-compose down -v        # Stop and remove volumes
+# ============================================================
+
+services:
+  # ------------------------------------------------------------------
+  # ML Service — Sentiment Analysis API
+  # ------------------------------------------------------------------
+  ml-service:
+    build:
+      context: ./ml-service
+      dockerfile: Dockerfile
+    container_name: sentinelops-ml
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_NAME=${MODEL_NAME:-distilbert-base-uncased-finetuned-sst-2-english}
+      - MODEL_CACHE_DIR=/app/models
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - CORS_ORIGINS=*
+    volumes:
+      - ml-model-cache:/app/models    # Persist model downloads
+    networks:
+      - sentinelops-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s    # Model download can take time on first run
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G         # DistilBERT + PyTorch needs ~1.5GB
+
+  # ------------------------------------------------------------------
+  # Auth Service — JWT Authentication
+  # ------------------------------------------------------------------
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: sentinelops-auth
+    ports:
+      - "3001:3001"
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-dev-refresh-secret-change-in-production}
+      - MONGO_URI=mongodb://mongo:27017/sentinelops
+      - PORT=3001
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - CORS_ORIGIN=*
+      - NODE_ENV=development
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - sentinelops-net
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # MongoDB — User Data Store
+  # ------------------------------------------------------------------
+  mongo:
+    image: mongo:7
+    container_name: sentinelops-mongo
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=sentinelops
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - sentinelops-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # API Gateway — Nginx Reverse Proxy
+  # ------------------------------------------------------------------
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: sentinelops-gateway
+    ports:
+      - "80:80"
+    depends_on:
+      ml-service:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    networks:
+      - sentinelops-net
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # Frontend — React (Vite Dev Server for local dev)
+  # ------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sentinelops-frontend
+    ports:
+      - "5173:5173"
+    networks:
+      - sentinelops-net
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # Prometheus — Metrics Collection
+  # ------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: sentinelops-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./kubernetes/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'
+      - '--web.enable-lifecycle'
+    networks:
+      - sentinelops-net
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # Grafana — Monitoring Dashboards
+  # ------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:latest
+    container_name: sentinelops-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-sentinelops}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - sentinelops-net
+    restart: unless-stopped
+
+# ------------------------------------------------------------------
+# Networks
+# ------------------------------------------------------------------
+networks:
+  sentinelops-net:
+    driver: bridge
+
+# ------------------------------------------------------------------
+# Volumes
+# ------------------------------------------------------------------
+volumes:
+  ml-model-cache:
+    driver: local
+  mongo-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local

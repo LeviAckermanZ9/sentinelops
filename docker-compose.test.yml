@@ -1,0 +1,59 @@
+# ============================================================
+# SentinelOps — Docker Compose (Test Environment)
+# ============================================================
+# Slim version for running tests in CI/CD.
+# Only spins up services needed for testing.
+# ============================================================
+
+services:
+  # MongoDB for auth tests
+  mongo-test:
+    image: mongo:7
+    container_name: sentinelops-mongo-test
+    ports:
+      - "27018:27017"
+    networks:
+      - test-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
+  # ML Service Tests
+  ml-service-test:
+    build:
+      context: ./ml-service
+      dockerfile: Dockerfile
+    container_name: sentinelops-ml-test
+    entrypoint: ["python", "-m", "pytest", "tests/", "-v", "--tb=short"]
+    working_dir: /app
+    volumes:
+      - ./ml-service/tests:/app/tests:ro
+    networks:
+      - test-net
+
+  # Auth Service Tests
+  auth-service-test:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: sentinelops-auth-test
+    entrypoint: ["npx", "jest", "--forceExit", "--detectOpenHandles", "--verbose"]
+    working_dir: /app
+    environment:
+      - MONGO_URI=mongodb://mongo-test:27017/sentinelops-test
+      - JWT_SECRET=test-secret-key
+      - JWT_REFRESH_SECRET=test-refresh-secret
+      - PORT=3001
+      - NODE_ENV=test
+    depends_on:
+      mongo-test:
+        condition: service_healthy
+    networks:
+      - test-net
+
+networks:
+  test-net:
+    driver: bridge

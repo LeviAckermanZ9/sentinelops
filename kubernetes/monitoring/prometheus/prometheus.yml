@@ -1,0 +1,47 @@
+# ============================================================
+# SentinelOps — Prometheus Scrape Configuration
+# ============================================================
+# Targets: ML Service, Auth Service, Prometheus self-monitoring
+# ============================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+# ---------------------------------------------------------------------------
+# Alerting Rules (loaded from rules files)
+# ---------------------------------------------------------------------------
+rule_files:
+  # - "alert_rules.yml"  # Uncomment when alert rules are added
+
+# ---------------------------------------------------------------------------
+# Scrape Targets
+# ---------------------------------------------------------------------------
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+
+  # ML Service — Sentiment Analysis API
+  - job_name: 'ml-service'
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['ml-service:8000']
+        labels:
+          service: 'ml-service'
+          environment: 'development'
+
+  # Auth Service — JWT Authentication
+  - job_name: 'auth-service'
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['auth-service:3001']
+        labels:
+          service: 'auth-service'
+          environment: 'development'
