@@ -1,0 +1,101 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: sentinelops
+  labels:
+    app: grafana
+data:
+  ml-service.json: |
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "id": null,
+      "links": [],
+      "liveNow": false,
+      "panels": [
+        {
+          "title": "Request Rate",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 15 } } },
+          "targets": [{ "expr": "sum(rate(prediction_requests_total[5m])) by (status)", "legendFormat": "{{status}}", "refId": "A" }]
+        },
+        {
+          "title": "Inference Latency (P50/P95/P99)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+          "targets": [
+            { "expr": "histogram_quantile(0.50, sum(rate(prediction_latency_seconds_bucket[5m])) by (le))", "legendFormat": "P50", "refId": "A" },
+            { "expr": "histogram_quantile(0.95, sum(rate(prediction_latency_seconds_bucket[5m])) by (le))", "legendFormat": "P95", "refId": "B" },
+            { "expr": "histogram_quantile(0.99, sum(rate(prediction_latency_seconds_bucket[5m])) by (le))", "legendFormat": "P99", "refId": "C" }
+          ]
+        },
+        {
+          "title": "Error Rate",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": { "defaults": { "unit": "reqps", "color": { "fixedColor": "red", "mode": "fixed" }, "custom": { "lineWidth": 2, "fillOpacity": 20 } } },
+          "targets": [{ "expr": "sum(rate(prediction_errors_total[5m])) by (error_type)", "legendFormat": "{{error_type}}", "refId": "A" }]
+        },
+        {
+          "title": "Active Predictions",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 10 }] } } },
+          "targets": [{ "expr": "sum(active_predictions)", "refId": "A" }]
+        },
+        {
+          "title": "Total Predictions",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [{ "expr": "sum(prediction_requests_total)", "refId": "A" }]
+        },
+        {
+          "title": "Model Load Time",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": { "defaults": { "unit": "s" } },
+          "targets": [{ "expr": "model_load_time_seconds", "refId": "A" }]
+        },
+        {
+          "title": "Uptime",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": { "defaults": { "mappings": [{ "options": { "1": { "text": "UP" }, "0": { "text": "DOWN" } }, "type": "value" }] } },
+          "targets": [{ "expr": "up{job=\"ml-service\"}", "refId": "A" }]
+        },
+        {
+          "title": "Sentiment Distribution",
+          "type": "piechart",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "options": { "pieType": "donut" },
+          "targets": [{ "expr": "sum(prediction_label_total) by (label)", "legendFormat": "{{label}}", "refId": "A" }]
+        },
+        {
+          "title": "Latency Heatmap",
+          "type": "heatmap",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [{ "expr": "sum(increase(prediction_latency_seconds_bucket[1m])) by (le)", "refId": "A", "format": "heatmap" }]
+        }
+      ],
+      "schemaVersion": 39,
+      "style": "dark",
+      "tags": ["sentinelops", "ml-service"],
+      "time": { "from": "now-1h", "to": "now" },
+      "title": "SentinelOps — ML Service Dashboard",
+      "uid": "sentinelops-ml",
+      "version": 1
+    }
