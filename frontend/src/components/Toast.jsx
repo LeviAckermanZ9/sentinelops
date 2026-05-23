@@ -1,30 +1,26 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
 export default function Toast({ toasts, removeToast }) {
   return (
     <div className="toast-container">
       {toasts.map((toast) => (
-        <ToastItem key={toast.id} toast={toast} onRemove={removeToast} />
+        <ToastItem key={toast.id} toast={toast} onDone={() => removeToast(toast.id)} />
       ))}
     </div>
   );
 }
 
-function ToastItem({ toast, onRemove }) {
-  const [exiting, setExiting] = useState(false);
-
+function ToastItem({ toast, onDone }) {
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setExiting(true);
-      setTimeout(() => onRemove(toast.id), 300);
-    }, 3000);
-
+    const timer = setTimeout(onDone, 4000);
     return () => clearTimeout(timer);
-  }, [toast.id, onRemove]);
+  }, [onDone]);
+
+  const icon = toast.type === 'success' ? '✓' : '✕';
 
   return (
-    <div className={`toast ${toast.type} ${exiting ? 'exiting' : ''}`}>
-      {toast.type === 'success' ? '✅ ' : '❌ '}
+    <div className={`toast ${toast.type}`}>
+      <span className="toast-icon">{icon}</span>
       {toast.message}
     </div>
   );

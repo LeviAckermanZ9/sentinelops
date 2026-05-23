@@ -43,11 +43,11 @@ export default function App() {
           text: data.text,
           label: data.label,
           score: data.score,
-          time: new Date().toLocaleTimeString(),
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
         ...prev,
-      ].slice(0, 50)); // Keep last 50
-      addToast('success', `Sentiment: ${data.label} (${Math.round(data.score * 100)}%)`);
+      ].slice(0, 50));
+      addToast('success', `${data.label === 'POSITIVE' ? '🟢' : '🔴'} ${data.label} — ${Math.round(data.score * 100)}% confidence`);
     } catch (err) {
       const msg = err.response?.data?.detail || err.response?.data?.message || 'Prediction failed';
       addToast('error', msg);
@@ -76,6 +76,13 @@ export default function App() {
 
   return (
     <div className="app-layout">
+      {/* Floating Particles */}
+      <div className="particles">
+        {Array.from({ length: 12 }, (_, i) => (
+          <div key={i} className="particle" />
+        ))}
+      </div>
+
       {/* Navbar */}
       <nav className="navbar">
         <div className="container" style={{
@@ -86,8 +93,8 @@ export default function App() {
           maxWidth: '1200px',
         }}>
           <div className="navbar-brand">
-            <div className="brand-icon">🛡️</div>
-            SentinelOps
+            <img src="/logo.png" alt="SentinelOps" className="brand-logo" />
+            <span className="brand-text">SentinelOps</span>
           </div>
 
           <div className="navbar-actions">
@@ -122,8 +129,15 @@ export default function App() {
           <div className="hero">
             <h1>Sentiment Analysis</h1>
             <p className="tagline">
-              Powered by DistilBERT — analyze the emotional tone of any text in real-time
+              Powered by <span className="accent">DistilBERT</span> — analyze the emotional tone of any text in real-time with production-grade AI
             </p>
+            <div className="feature-pills">
+              <span className="feature-pill">⚡ Real-time Inference</span>
+              <span className="feature-pill">🧠 DistilBERT Model</span>
+              <span className="feature-pill">📊 Prometheus Metrics</span>
+              <span className="feature-pill">🔒 JWT Auth</span>
+              <span className="feature-pill">☸️ K8s Ready</span>
+            </div>
           </div>
 
           {/* Main Grid */}
@@ -140,14 +154,14 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer style={{
-        textAlign: 'center',
-        padding: 'var(--space-lg)',
-        color: 'var(--text-muted)',
-        fontSize: 'var(--font-size-xs)',
-        borderTop: '1px solid var(--border-subtle)',
-      }}>
-        SentinelOps v1.0.0 — INT377 Cloud Computing & DevOps Essentials
+      <footer className="footer">
+        <span className="footer-brand">🛡️ SentinelOps v1.0.0</span>
+        <span>INT377 — Cloud Computing & DevOps Essentials • Session 2025-26</span>
+        <div className="footer-links">
+          <a href="https://github.com" target="_blank" rel="noreferrer">GitHub</a>
+          <a href="http://localhost:3000" target="_blank" rel="noreferrer">Grafana</a>
+          <a href="http://localhost:9090" target="_blank" rel="noreferrer">Prometheus</a>
+        </div>
       </footer>
 
       {/* Login Modal */}

@@ -41,15 +41,7 @@ export default function LoginModal({ onClose, onAuth }) {
         </p>
 
         {error && (
-          <div style={{
-            padding: 'var(--space-sm) var(--space-md)',
-            background: 'var(--negative-bg)',
-            border: '1px solid rgba(248,113,113,0.3)',
-            borderRadius: 'var(--radius-sm)',
-            color: 'var(--negative)',
-            fontSize: 'var(--font-size-sm)',
-            marginBottom: 'var(--space-md)',
-          }}>
+          <div className="modal-error">
             {error}
           </div>
         )}
