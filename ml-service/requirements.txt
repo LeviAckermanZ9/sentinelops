@@ -1,0 +1,25 @@
+# ML Service - SentinelOps
+# Core
+fastapi
+uvicorn[standard]
+pydantic
+
+# ML
+transformers
+torch
+sentencepiece
+
+# Monitoring
+prometheus-fastapi-instrumentator
+prometheus-client
+
+# Logging
+python-json-logger
+
+# CORS
+python-multipart
+
+# Testing
+pytest
+pytest-asyncio
+httpx
