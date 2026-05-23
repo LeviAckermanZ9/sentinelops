@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ml-service-config
+  namespace: sentinelops
+data:
+  MODEL_NAME: "distilbert-base-uncased-finetuned-sst-2-english"
+  LOG_LEVEL: "INFO"

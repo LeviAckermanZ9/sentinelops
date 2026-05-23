@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: sentinelops
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      scrape_timeout: 10s
+
+    rule_files:
+      - "alert_rules.yml"
+
+    scrape_configs:
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+
+      - job_name: 'ml-service'
+        metrics_path: '/metrics'
+        scrape_interval: 15s
+        static_configs:
+          - targets: ['ml-service.sentinelops.svc.cluster.local:8000']
+            labels:
+              service: 'ml-service'
+              environment: 'production'
+
+      - job_name: 'auth-service'
+        metrics_path: '/metrics'
+        scrape_interval: 15s
+        static_configs:
+          - targets: ['auth-service.sentinelops.svc.cluster.local:3001']
+            labels:
+              service: 'auth-service'
+              environment: 'production'
+
+  alert_rules.yml: |
+    groups:
+      - name: sentinelops-alerts
+        rules:
+          - alert: HighPredictionLatency
+            expr: histogram_quantile(0.95, rate(prediction_latency_seconds_bucket[5m])) > 0.5
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High prediction latency (P95 > 500ms)"
+              description: "ML service P95 latency is {{ $value }}s over the last 5 minutes."
+
+          - alert: HighErrorRate
+            expr: rate(prediction_errors_total[5m]) / rate(prediction_requests_total[5m]) > 0.05
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "High prediction error rate (> 5%)"
+              description: "ML service error rate is {{ $value | humanizePercentage }}."
+
+          - alert: ServiceDown
+            expr: up{job=~"ml-service|auth-service"} == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Service {{ $labels.job }} is down"
+              description: "Prometheus cannot reach {{ $labels.job }} for more than 1 minute."
+
+          - alert: HighMemoryUsage
+            expr: process_resident_memory_bytes{job="ml-service"} > 1.5e9
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "ML service high memory usage (> 1.5GB)"
+              description: "ML service is using {{ $value | humanize1024 }}B of memory."
