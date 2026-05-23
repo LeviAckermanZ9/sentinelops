@@ -66,6 +66,7 @@ ml-service/models/special_tokens*
 kubernetes/secrets/*.yaml
 kubernetes/secrets/*.yml
 !kubernetes/secrets/.gitkeep
+!kubernetes/secrets/*-template.yaml
 
 # ---------------------- TLS / SSL ----------------------
 api-gateway/ssl/*.pem
