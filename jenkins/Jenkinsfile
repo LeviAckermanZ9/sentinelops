@@ -1,0 +1,209 @@
+// ============================================================
+// SentinelOps — Jenkins CI/CD Pipeline (Main Branch)
+// ============================================================
+// 8-stage declarative pipeline:
+//   1. Checkout → 2. Unit Tests → 3. Build Images →
+//   4. Security Scan → 5. Push Images → 6. Deploy to K8s →
+//   7. Smoke Test → 8. Notify
+// ============================================================
+
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_HUB    = credentials('docker-hub-creds')
+        REGISTRY      = 'sentinelops'
+        IMAGE_TAG     = "${env.GIT_COMMIT?.take(8) ?: 'latest'}"
+        KUBECONFIG    = credentials('kubeconfig-sentinelops')
+        K8S_NAMESPACE = 'sentinelops'
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timestamps()
+    }
+
+    stages {
+        // ----------------------------------------------------------
+        // Stage 1: Checkout
+        // ----------------------------------------------------------
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    echo "🔄 Checked out commit: ${env.GIT_COMMIT}"
+                    echo "🏷️  Image tag: ${IMAGE_TAG}"
+                }
+            }
+        }
+
+        // ----------------------------------------------------------
+        // Stage 2: Unit Tests
+        // ----------------------------------------------------------
+        stage('Unit Tests') {
+            parallel {
+                stage('ML Service Tests') {
+                    steps {
+                        dir('ml-service') {
+                            sh '''
+                                python -m venv .venv
+                                . .venv/bin/activate
+                                pip install -r requirements.txt --quiet
+                                python -m pytest tests/ -v --tb=short --junitxml=../test-results/ml-service.xml
+                            '''
+                        }
+                    }
+                    post {
+                        always {
+                            junit allowEmptyResults: true, testResults: 'test-results/ml-service.xml'
+                        }
+                    }
+                }
+                stage('Auth Service Tests') {
+                    steps {
+                        dir('auth-service') {
+                            sh '''
+                                npm ci --quiet
+                                npm test -- --ci --forceExit
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+
+        // ----------------------------------------------------------
+        // Stage 3: Build Docker Images
+        // ----------------------------------------------------------
+        stage('Build Images') {
+            steps {
+                sh "chmod +x jenkins/scripts/build.sh"
+                sh "./jenkins/scripts/build.sh ${IMAGE_TAG} ${REGISTRY}"
+            }
+        }
+
+        // ----------------------------------------------------------
+        // Stage 4: Security Scan (Trivy)
+        // ----------------------------------------------------------
+        stage('Security Scan') {
+            steps {
+                sh "chmod +x jenkins/scripts/scan.sh"
+                sh "./jenkins/scripts/scan.sh ${IMAGE_TAG} ${REGISTRY}"
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'trivy-report-*.json', allowEmptyArchive: true
+                }
+            }
+        }
+
+        // ----------------------------------------------------------
+        // Stage 5: Push Images to Registry
+        // ----------------------------------------------------------
+        stage('Push Images') {
+            steps {
+                script {
+                    sh "echo ${DOCKER_HUB_PSW} | docker login -u ${DOCKER_HUB_USR} --password-stdin"
+
+                    def services = ['ml-service', 'auth-service', 'api-gateway', 'frontend']
+                    for (svc in services) {
+                        sh "docker push ${REGISTRY}/${svc}:${IMAGE_TAG}"
+                        sh "docker push ${REGISTRY}/${svc}:latest"
+                        echo "✅ Pushed ${svc}:${IMAGE_TAG}"
+                    }
+                }
+            }
+        }
+
+        // ----------------------------------------------------------
+        // Stage 6: Deploy to Kubernetes
+        // ----------------------------------------------------------
+        stage('Deploy to K8s') {
+            steps {
+                sh "chmod +x jenkins/scripts/deploy.sh"
+                sh "./jenkins/scripts/deploy.sh ${IMAGE_TAG} ${REGISTRY} ${K8S_NAMESPACE} 300s"
+            }
+        }
+
+        // ----------------------------------------------------------
+        // Stage 7: Smoke Test
+        // ----------------------------------------------------------
+        stage('Smoke Test') {
+            steps {
+                script {
+                    // Wait for services to stabilize
+                    sleep(time: 15, unit: 'SECONDS')
+
+                    // Get the gateway external IP/hostname
+                    def gatewayIP = sh(
+                        script: "kubectl get svc api-gateway -n ${K8S_NAMESPACE} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'",
+                        returnStdout: true
+                    ).trim()
+
+                    if (!gatewayIP) {
+                        gatewayIP = sh(
+                            script: "kubectl get svc api-gateway -n ${K8S_NAMESPACE} -o jsonpath='{.status.loadBalancer.ingress[0].ip}'",
+                            returnStdout: true
+                        ).trim()
+                    }
+
+                    echo "🔍 Smoke testing at: http://${gatewayIP}"
+
+                    // ML health check
+                    sh "curl -sf http://${gatewayIP}/api/health/ml || (echo '❌ ML health check failed' && exit 1)"
+                    echo "✅ ML service health check passed"
+
+                    // Auth health check
+                    sh "curl -sf http://${gatewayIP}/api/health/auth || (echo '❌ Auth health check failed' && exit 1)"
+                    echo "✅ Auth service health check passed"
+
+                    // Prediction test
+                    def response = sh(
+                        script: """curl -sf -X POST http://${gatewayIP}/api/predict \
+                            -H 'Content-Type: application/json' \
+                            -d '{"text": "SentinelOps deployment successful!"}'""",
+                        returnStdout: true
+                    ).trim()
+                    echo "✅ Prediction smoke test response: ${response}"
+                }
+            }
+        }
+
+        // ----------------------------------------------------------
+        // Stage 8: Notify
+        // ----------------------------------------------------------
+        stage('Notify') {
+            steps {
+                echo "✅ Pipeline completed successfully!"
+                echo "🏷️  Deployed version: ${IMAGE_TAG}"
+                // Uncomment for Slack notification:
+                // slackSend(
+                //     channel: '#sentinelops-deployments',
+                //     color: 'good',
+                //     message: "✅ SentinelOps deployed: ${IMAGE_TAG}\nBuild: ${env.BUILD_URL}"
+                // )
+            }
+        }
+    }
+
+    // ----------------------------------------------------------
+    // Post-Pipeline Actions
+    // ----------------------------------------------------------
+    post {
+        failure {
+            echo "❌ Pipeline FAILED at stage: ${env.STAGE_NAME}"
+            // Uncomment for Slack notification:
+            // slackSend(
+            //     channel: '#sentinelops-deployments',
+            //     color: 'danger',
+            //     message: "❌ SentinelOps pipeline failed: ${env.BUILD_URL}"
+            // )
+        }
+        always {
+            cleanWs()
+            sh 'docker logout || true'
+        }
+    }
+}

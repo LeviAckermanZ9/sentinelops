@@ -1,0 +1,93 @@
+// ============================================================
+// SentinelOps — Jenkins PR Pipeline
+// ============================================================
+// Runs on Pull Requests: test + build + scan (NO deploy)
+// Validates code quality before merge
+// ============================================================
+
+pipeline {
+    agent any
+
+    environment {
+        REGISTRY  = 'sentinelops'
+        IMAGE_TAG = "pr-${env.CHANGE_ID}-${env.GIT_COMMIT?.take(8) ?: 'latest'}"
+    }
+
+    options {
+        timeout(time: 20, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '5'))
+        timestamps()
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                echo "🔄 PR #${env.CHANGE_ID}: ${env.CHANGE_TITLE}"
+            }
+        }
+
+        stage('Unit Tests') {
+            parallel {
+                stage('ML Service Tests') {
+                    steps {
+                        dir('ml-service') {
+                            sh '''
+                                python -m venv .venv
+                                . .venv/bin/activate
+                                pip install -r requirements.txt --quiet
+                                python -m pytest tests/ -v --tb=short --junitxml=../test-results/ml-service.xml
+                            '''
+                        }
+                    }
+                    post {
+                        always {
+                            junit allowEmptyResults: true, testResults: 'test-results/ml-service.xml'
+                        }
+                    }
+                }
+                stage('Auth Service Tests') {
+                    steps {
+                        dir('auth-service') {
+                            sh '''
+                                npm ci --quiet
+                                npm test -- --ci --forceExit
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Build Images') {
+            steps {
+                sh "chmod +x jenkins/scripts/build.sh"
+                sh "./jenkins/scripts/build.sh ${IMAGE_TAG} ${REGISTRY}"
+            }
+        }
+
+        stage('Security Scan') {
+            steps {
+                sh "chmod +x jenkins/scripts/scan.sh"
+                sh "./jenkins/scripts/scan.sh ${IMAGE_TAG} ${REGISTRY}"
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'trivy-report-*.json', allowEmptyArchive: true
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ PR pipeline passed — ready for review"
+        }
+        failure {
+            echo "❌ PR pipeline failed — fix issues before merging"
+        }
+        always {
+            cleanWs()
+        }
+    }
+}

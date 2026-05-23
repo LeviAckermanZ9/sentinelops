@@ -1,0 +1,28 @@
+# ============================================================
+# SentinelOps — Trivy Configuration
+# ============================================================
+# Applied during Jenkins CI/CD security scan stage
+# ============================================================
+
+severity:
+  - CRITICAL
+  - HIGH
+
+# Exit with code 1 on CRITICAL vulnerabilities (fails the pipeline)
+exit-code: 1
+
+# Ignore unfixed vulnerabilities (no available patch)
+ignore-unfixed: true
+
+# Skip scanning for license issues (focus on CVEs)
+security-checks:
+  - vuln
+
+# Timeout for scanning
+timeout: 5m
+
+# Cache directory for vulnerability DB
+cache-dir: /tmp/trivy-cache
+
+# Output format for CI
+format: table
