@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: sentinelops-jenkins
+    privileged: true
+    user: root
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      # Mount Docker socket so Jenkins can build images (Docker-in-Docker)
+      - /var/run/docker.sock:/var/run/docker.sock
+volumes:
+  jenkins_home:
